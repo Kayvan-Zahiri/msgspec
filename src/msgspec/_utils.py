@@ -157,31 +157,6 @@ def _get_class_mro_and_typevar_mappings(obj):
     return cls.__mro__, mapping
 
 
-def _substitute_copied_typeddict_params(origin, hints, typevar_mappings, mro):
-    """Apply type-parameter bindings TypedDict inheritance leaves unresolved.
-
-    ``TypedDict`` copies base annotations onto the subclass and omits the base
-    from the MRO, so the mapping built for ``Base[int]`` is never applied to
-    the copied ``TypeVar``. Substitute only fields still identical to the
-    base annotation; an override on the subclass is left alone.
-    """
-    if origin is None or not hasattr(origin, "__required_keys__"):
-        return hints
-
-    mro_set = set(mro)
-    child_raw = _get_class_annotations(origin)
-    for parent, scope in typevar_mappings.items():
-        if parent in mro_set or not scope:
-            continue
-        parent_raw = _get_class_annotations(parent)
-        for key, parent_value in parent_raw.items():
-            # TypedDict copies the base annotation object onto the subclass.
-            # An override is a different object and must be left alone.
-            if key in hints and child_raw.get(key) == parent_value:
-                hints[key] = _apply_params(hints[key], scope)
-    return hints
-
-
 def get_class_annotations(obj):
     """Get the annotations for a class.
 
@@ -232,8 +207,8 @@ def get_class_annotations(obj):
         # ForwardRef evaluation looks those names up as type parameters. The
         # base is not in the MRO, so add its parameters here. Skip names this
         # class already defines so a subclass type parameter is not replaced.
-        eval_params = tuple(type_params)
-        seen_names = {getattr(param, "__name__", None) for param in eval_params}
+        all_type_params = tuple(type_params)
+        seen_names = {getattr(param, "__name__", None) for param in all_type_params}
         for parent, scope in typevar_mappings.items():
             if parent in mro_set:
                 continue
@@ -241,7 +216,7 @@ def get_class_annotations(obj):
                 name = getattr(tvar, "__name__", None)
                 if name and name not in seen_names:
                     seen_names.add(name)
-                    eval_params = eval_params + (tvar,)
+                    all_type_params = all_type_params + (tvar,)
 
         ann = _get_class_annotations(cls)
         for name, value in ann.items():
@@ -249,7 +224,7 @@ def get_class_annotations(obj):
                 continue
             if isinstance(value, str):
                 value = _forward_ref(value)
-            value = _eval_type(value, cls_locals, cls_globals, eval_params)
+            value = _eval_type(value, cls_locals, cls_globals, all_type_params)
             if mapping is not None:
                 value = _apply_params(value, mapping)
             if value is None:
@@ -257,6 +232,38 @@ def get_class_annotations(obj):
             hints[name] = value
 
     return _substitute_copied_typeddict_params(origin, hints, typevar_mappings, mro)
+
+
+def _substitute_copied_typeddict_params(origin, hints, typevar_mappings, mro):
+    """Apply type-parameter bindings TypedDict inheritance leaves unresolved.
+
+    ``TypedDict`` copies base annotations onto the subclass and omits the base
+    from the MRO, so the mapping built for ``Base[int]`` is never applied to
+    the copied ``TypeVar``. Substitute only fields still identical to the
+    base annotation; an override on the subclass is left alone.
+    """
+    if origin is None or not _is_typeddict(origin):
+        return hints
+
+    mro_set = set(mro)
+    child_raw = _get_class_annotations(origin)
+    for parent, scope in typevar_mappings.items():
+        if parent in mro_set or not scope:
+            continue
+        parent_raw = _get_class_annotations(parent)
+        for key, parent_value in parent_raw.items():
+            # TypedDict copies the base annotation object onto the subclass.
+            # An override is a different object and must be left alone.
+            if key in hints and child_raw.get(key) == parent_value:
+                hints[key] = _apply_params(hints[key], scope)
+    return hints
+
+
+def _is_typeddict(t):
+    try:
+        return issubclass(t, dict) and hasattr(t, "__total__")
+    except TypeError:
+        return False
 
 
 # A mapping from a type annotation (or annotation __origin__) to the concrete

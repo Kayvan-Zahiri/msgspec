@@ -2828,6 +2828,11 @@ class TestTypedDict:
             with pytest.raises(ValidationError):
                 proto.decode(bad, type=mod.Sub)
 
+            base_msg = proto.encode({"b": 1})
+            assert proto.decode(base_msg, type=mod.Base[int]) == {"b": 1}
+            with pytest.raises(ValidationError):
+                proto.decode(proto.encode({"b": "x"}), type=mod.Base[int])
+
     def test_types_generic_alias_non_generic_errors(self):
         # mostly a smoke test to weed out some bogus stuff that may get passed to us.
         # parametrising a non-generic TypedDict via a manually-built
