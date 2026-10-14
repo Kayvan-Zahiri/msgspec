@@ -260,6 +260,8 @@ def _substitute_copied_typeddict_params(origin, hints, typevar_mappings, mro):
 
 
 def _is_typeddict(t):
+    # Not `typing.is_typeddict`: it returns False for `typing_extensions.TypedDict`
+    # classes, which msgspec supports. This matches the check in `_core.c`.
     try:
         return issubclass(t, dict) and hasattr(t, "__total__")
     except TypeError:
