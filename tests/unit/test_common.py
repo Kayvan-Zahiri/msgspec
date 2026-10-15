@@ -2806,6 +2806,8 @@ class TestTypedDict:
             msg = proto.encode({"x": 1})
             assert proto.decode(msg, type=mod.Ex) == {"x": 1}
 
+    # typing.TypedDict can't be generic before 3.11.
+    @py311_plus
     def test_generic_subclass_keeps_type_argument(self, proto):
         # TypedDict drops a parametrized base from the MRO and copies its
         # annotations unchanged, so Sub(Base[int]) used to accept any value

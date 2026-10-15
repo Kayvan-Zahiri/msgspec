@@ -13,6 +13,8 @@ T = TypeVar("T")
 S = TypeVar("S")
 U = TypeVar("U")
 
+PY311 = sys.version_info[:2] >= (3, 11)
+py311_plus = pytest.mark.skipif(not PY311, reason="3.11+ only")
 PY312 = sys.version_info[:2] >= (3, 12)
 py312_plus = pytest.mark.skipif(not PY312, reason="3.12+ only")
 
@@ -256,6 +258,8 @@ class TestGetClassAnnotations:
             assert get_class_annotations(Ex) == {"x": tvar, "y": list[tvar]}
             assert get_class_annotations(Ex[int]) == {"x": int, "y": list[int]}
 
+    # typing.TypedDict can't be generic before 3.11.
+    @py311_plus
     def test_generic_typeddict_subclass_keeps_type_argument(self):
         # TypedDict copies base annotations onto the subclass and drops the
         # base from the MRO, so Base[int] used to leave the field as a TypeVar.
